@@ -2,8 +2,9 @@ package server.controllers;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,10 +17,13 @@ import java.util.List;
 @Component
 @RequestMapping("/user")
 public class UserController {
-    UserMapper userMapper;
+    private UserMapper userMapper;
 
-    public UserController(@Autowired UserMapper userMapper) {
+    private ApplicationContext context;
+
+    public UserController(@Autowired UserMapper userMapper, @Autowired ApplicationContext context) {
         this.userMapper = userMapper;
+        this.context = context;
     }
 
     @RequestMapping("getAll")
@@ -31,7 +35,7 @@ public class UserController {
     public User getUser(@PathVariable int userId) {
         QueryWrapper<User> wrapper = new QueryWrapper<>();
         wrapper.eq("uid", userId);
-    return userMapper.selectById(wrapper);
+        return userMapper.selectOne(wrapper);
     }
 
     @RequestMapping("addUser/{userId}/{userName}/{password}")
@@ -39,12 +43,16 @@ public class UserController {
             @PathVariable Integer userId,
             @PathVariable String userName,
             @PathVariable String password) {
-        User user = new User(userId, userName, password);
+        PasswordEncoder passwordEncoder = (PasswordEncoder) context.getBean(PasswordEncoder.class);
+        String encoded = passwordEncoder.encode(password);
+        User user = new User(userId, userName, encoded);
         return userMapper.insert(user);
     }
 
     @RequestMapping("deleteUser/{userId}")
     public int deleteUser(@PathVariable int userId) {
-        return userMapper.deleteById(userId);
+        QueryWrapper<User> wrapper = new QueryWrapper<>();
+        wrapper.eq("uid", userId);
+        return userMapper.delete(wrapper);
     }
 }
