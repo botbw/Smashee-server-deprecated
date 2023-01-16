@@ -1,4 +1,4 @@
-package server.service.impl;
+package server.service.user.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.springframework.security.core.userdetails.UserDetails;

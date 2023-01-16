@@ -1,4 +1,4 @@
-package server.controllers;
+package server.controllers.user;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,7 +45,7 @@ public class UserController {
             @PathVariable String password) {
         PasswordEncoder passwordEncoder = (PasswordEncoder) context.getBean(PasswordEncoder.class);
         String encoded = passwordEncoder.encode(password);
-        User user = new User(userId, userName, encoded);
+        User user = new User(userId, userName, encoded, null);
         return userMapper.insert(user);
     }
 
