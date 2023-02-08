@@ -1,12 +1,8 @@
 package server.controllers.user.account;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import server.service.user.impl.account.RegisterService;
-import server.service.user.impl.account.impl.RegisterServiceImpl;
 
 import java.util.Map;
 
@@ -20,10 +16,10 @@ public class RegisterController {
     }
 
     @PostMapping("/register")
-    public Map<String, String> register(@RequestBody Map<String, String> body) {
-        String usrname = body.get("usrname");
-        String pwd = body.get("pwd");
-        String confirmedPwd = body.get("confirmedPwd");
+    public Map<String, String> register(@RequestParam Map<String, String> json) {
+        String usrname = json.get("usrname");
+        String pwd = json.get("pwd");
+        String confirmedPwd = json.get("confirmedPwd");
         return registerService.register(usrname, pwd, confirmedPwd);
     }
 }

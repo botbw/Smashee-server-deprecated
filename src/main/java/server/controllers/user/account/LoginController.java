@@ -16,9 +16,9 @@ public class LoginController {
     }
 
     @PostMapping("/getToken")
-    public Map<String, String> getToken(@RequestParam Map<String, String> body) {
-        String usrname = body.get("usrname");
-        String pwd = body.get("pwd");
+    public Map<String, String> getToken(@RequestParam Map<String, String> json) {
+        String usrname = json.get("usrname");
+        String pwd = json.get("pwd");
         return loginService.getLoginToken(usrname, pwd);
     }
 
