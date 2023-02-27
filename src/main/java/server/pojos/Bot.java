@@ -22,8 +22,9 @@ public class Bot {
     private String code;
     private Integer rating;
 
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd")
     private Date createtime;
+    @JsonFormat(pattern = "yyyy-MM-dd")
     private Date edittime;
 
     public static final Integer MAX_NAME_LENGTH = 100;

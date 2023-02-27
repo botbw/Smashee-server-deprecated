@@ -57,4 +57,14 @@ public class JwtUtil {
                 .parseClaimsJws(jwt)
                 .getBody();
     }
+
+    public static Integer parseUserId(String jwt)  {
+        Claims claims = null;
+        try {
+            claims = JwtUtil.parseJWT(jwt);
+        } catch (Exception e) {
+            return -1;
+        }
+        return Integer.parseInt(claims.getSubject());
+    }
 }
