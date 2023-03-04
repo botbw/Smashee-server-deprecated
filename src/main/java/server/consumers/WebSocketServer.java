@@ -1,9 +1,12 @@
 package server.consumers;
 
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Component;
+import server.games.greedysnake.Direction;
+import server.games.greedysnake.Event;
+import server.games.greedysnake.GreedySnake;
 import server.mappers.UserMapper;
 import server.pojos.User;
 import server.utils.JwtUtil;
@@ -13,6 +16,7 @@ import javax.websocket.server.PathParam;
 import javax.websocket.server.ServerEndpoint;
 import java.io.IOException;
 import java.util.Iterator;
+import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 
@@ -22,13 +26,20 @@ public class WebSocketServer { // NOT BEAN
     private static ConcurrentHashMap<Integer, WebSocketServer> userOf = new ConcurrentHashMap<>();
     private static CopyOnWriteArraySet<User> pool = new CopyOnWriteArraySet<>();
 
-    // client session
-    private Session session;
-    // client user
-    private User user;
-
     // the class is not a bean
     private static UserMapper userMapper;
+    // client session
+    private Session session;
+
+    // client user
+    private User user;
+    // game
+    private GreedySnake game;
+
+    public User getUser() {
+        return user;
+    }
+
 
     @Autowired
     public void setUserMapper(UserMapper userMapper) {
@@ -60,12 +71,14 @@ public class WebSocketServer { // NOT BEAN
     public void onMessage(String msg, Session session) {
         System.out.println("onMsg");
         JSONObject json = JSONObject.parseObject(msg);
-        String event = json.getString("event");
+        String event = json.getString("event").toUpperCase(Locale.ROOT);
         System.out.println(event);
-        if("start".equals(event)) {
+        if(Event.START.toString().equals(event)) {
             startMatching();
-        } else if("cancel".equals(event)) {
+        } else if(Event.CANCEL.toString().equals(event)) {
             cancelMatching();
+        } else if(Event.MOVE.toString().equals(event)) {
+            move(Direction.getDir(json.getString("direction")));
         } else {
             sendMessage("unknown event");
         }
@@ -82,36 +95,68 @@ public class WebSocketServer { // NOT BEAN
                 Iterator<User> it = pool.iterator();
 
                 User u1 = it.next(), u2 = it.next();
-
-                GreedySnakeMap map = new GreedySnakeMap();
-
+                WebSocketServer socket1 = userOf.get(u1.getUid()), socket2 = userOf.get(u2.getUid());
                 pool.remove(u1);
                 pool.remove(u2);
 
+                this.game = new GreedySnake(socket1, socket2);
+                userOf.get(u1.getUid()).game = this.game;
+                userOf.get(u2.getUid()).game = this.game;
+                this.game.start();
+
+
+                JSONObject player1 = new JSONObject();
+                player1.put("uid", game.getSnake1().getUid());
+                player1.put("x", game.getSnake1().getX());
+                player1.put("y", game.getSnake1().getY());
+
+                JSONObject player2 = new JSONObject();
+                player2.put("uid", game.getSnake2().getUid());
+                player2.put("x", game.getSnake2().getX());
+                player2.put("y", game.getSnake2().getY());
+
+                JSONObject gameInfo = new JSONObject();
+                gameInfo.put("player1", player1);
+                gameInfo.put("player2", player2);
+                gameInfo.put("map", game.getGameMap());
+
+
                 JSONObject resp1 = new JSONObject();
-                resp1.put("event", "GameStart");
+                resp1.put("event", Event.START.toString());
                 JSONObject oppo1 = new JSONObject();
                 oppo1.put("usrname", u2.getUsrname());
                 oppo1.put("avatar", u2.getAvatar());
                 resp1.put("opponent", oppo1);
-                resp1.put("map", map.walls);
-                userOf.get(u1.getUid()).sendMessage(resp1.toJSONString());
+                resp1.put("gameInfo", gameInfo);
+                socket1.sendMessage(resp1.toJSONString());
 
                 JSONObject resp2 = new JSONObject();
-                resp2.put("event", "GameStart");
+                resp2.put("event", Event.START.toString());
                 JSONObject oppo2 = new JSONObject();
                 oppo2.put("usrname", u1.getUsrname());
                 oppo2.put("avatar", u1.getAvatar());
                 resp2.put("opponent", oppo2);
-                resp2.put("map", map.walls);
-                userOf.get(u2.getUid()).sendMessage(resp2.toJSONString());
+                resp2.put("gameInfo", gameInfo);
+                socket2.sendMessage(resp2.toJSONString());
 
+                System.out.println(resp1.toJSONString());
+                System.out.println(resp2.toJSONString());
             }
         }
     }
 
     private void cancelMatching() {
 
+    }
+
+    private void move(Direction dir) {
+        if(game.getSnake1().getUid() == user.getUid()) {
+            game.getSnake1().dir = dir;
+        } else if(game.getSnake2().getUid() == user.getUid()) {
+            game.getSnake2().dir = dir;
+        } else {
+            throw new RuntimeException();
+        }
     }
 
     @OnError
