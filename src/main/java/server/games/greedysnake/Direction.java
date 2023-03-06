@@ -7,6 +7,7 @@ public enum Direction {
     RIGHT, // 1
     DOWN,  // 2
     LEFT; // 3
+    public static final Integer[] dx = {-1, 0, 1, 0}, dy = {0, 1, 0, -1};
     public static Direction getDir(String dir) {
         if(dir == null) return null;
         if(dir.toUpperCase().equals("UP")) {
@@ -19,5 +20,13 @@ public enum Direction {
             return Direction.LEFT;
         }
         return null;
+    }
+    public static Integer getId(Direction dir) {
+        if(dir == null) return -1;
+        if(dir == Direction.UP) return 0;
+        else if(dir == Direction.RIGHT) return 1;
+        else if(dir == Direction.DOWN) return 2;
+        else if(dir == Direction.LEFT) return 3;
+        return -1;
     }
 }

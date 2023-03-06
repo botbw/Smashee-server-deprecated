@@ -1,14 +1,17 @@
 package server.games.greedysnake;
 
 import com.alibaba.fastjson.JSONObject;
+import org.springframework.beans.factory.annotation.Autowired;
 import server.consumers.WebSocketServer;
+import server.mappers.RecordMapper;
+import server.pojos.Record;
 
+import java.util.Date;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class GreedySnake extends Thread{ // generate symmetric map
-    private static final Integer[] dx = {-1, 0, 1, 0}, dy = {0, 1, 0, -1};
-
     private static final Integer ROW_CNT = 13;
     private static final Integer COL_CNT = 14;
     private static final Integer WALL_CNT = 40;
@@ -17,11 +20,15 @@ public class GreedySnake extends Thread{ // generate symmetric map
     private final WebSocketServer socket1, socket2;
 
     private final ReentrantLock lock;
+    private Direction next1, next2;
+
     private final Snake snake1, snake2;
 
+    public Status getStatus() {
+        return status;
+    }
 
     private Status status;
-
 
     public GreedySnake(WebSocketServer socket1, WebSocketServer socket2) {
         int time = 0;
@@ -37,9 +44,29 @@ public class GreedySnake extends Thread{ // generate symmetric map
         this.socket2 = socket2;
         Integer uid1 = socket1.getUser().getUid(), uid2 = socket2.getUser().getUid();
         this.snake1 = new Snake(uid1, 1, 1);
-        this.snake2 = new Snake(uid2, COL_CNT - 2, ROW_CNT - 2);
+        this.snake2 = new Snake(uid2, ROW_CNT - 2, COL_CNT - 2);
         this.lock = new ReentrantLock();
+        this.next1 = this.next2 = null;
         this.status = Status.IN_GAME;
+    }
+
+
+    public void setNext1(Direction next1) {
+        lock.lock();
+        try {
+            this.next1 = next1;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public void setNext2(Direction next2) {
+        lock.lock();
+        try {
+            this.next2 = next2;
+        } finally {
+            lock.unlock();
+        }
     }
 
     boolean[][] draw() {
@@ -76,7 +103,7 @@ public class GreedySnake extends Thread{ // generate symmetric map
         map[x][y] = true;
 
         for (int i = 0; i < 4; i++) {
-            int xx = x + dx[i], yy = y + dy[i];
+            int xx = x + Direction.dx[i], yy = y + Direction.dy[i];
             if (xx >= 0 && yy >= 0 && xx < COL_CNT && yy < COL_CNT && !map[xx][yy])
                 if (dfs(map, xx, yy, dstX, dstY)) {
                     map[x][y] = false;
@@ -91,23 +118,24 @@ public class GreedySnake extends Thread{ // generate symmetric map
     public void run() {
         for(int i = 0; i < 1000; i++) { // long loop
             System.out.println(i);
-            if(nextStep()) { // got next step input for both
+            if(checkNextStep()) { // got next step input for both
                 this.status = judge();
                 System.out.println(this.status.toString());
                 if(this.status == Status.IN_GAME) {
                     broadcastMove();
                 } else { // game ends
+                    saveResult();
                     broadcastResult();
                     break;
                 }
             } else { // game ends
                 lock.lock();
                 try {
-                    if(snake1.dir == null && snake2.dir == null) {
+                    if(next1 == null && next2 == null) {
                         status = Status.DRAW;
-                    } else if(snake1.dir == null) {
+                    } else if(next1 == null) {
                         status = Status.SNAKE2_WIN;
-                    } else if(snake2.dir == null) {
+                    } else if(next2 == null) {
                         status = Status.SNAKE1_WIN;
                     }
                 } finally {
@@ -121,20 +149,23 @@ public class GreedySnake extends Thread{ // generate symmetric map
         }
     }
 
-    private boolean nextStep() {
+    private boolean checkNextStep() {
         try {
             Thread.sleep(500);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
 
-
         for (int i = 0; i < 100; i++) {
             try {
                 Thread.sleep(100); // 100 * 100 sleep
                 lock.lock();
                 try {
-                    if(snake1.dir != null && snake2.dir != null) return true;
+                    if(next1 != null && next2 != null) {
+                        snake1.dirHis.add(next1);
+                        snake2.dirHis.add(next2);
+                        return true;
+                    }
                 } finally {
                     lock.unlock();
                 }
@@ -148,6 +179,27 @@ public class GreedySnake extends Thread{ // generate symmetric map
     private void broadcastMsg(String msg) {
         socket1.sendMessage(msg);
         socket2.sendMessage(msg);
+    }
+
+    private void saveResult() {
+        Record r = new Record(
+                null,
+                snake1.getUid(),
+                snake2.getUid(),
+                snake1.getStX(),
+                snake1.getStY(),
+                snake2.getStX(),
+                snake2.getStY(),
+                snake1.getDirHisString(),
+                snake2.getDirHisString(),
+                ROW_CNT,
+                COL_CNT,
+                getGameMapString(),
+                status.toString(),
+                new Date()
+        );
+
+        WebSocketServer.recordMapper.insert(r);
     }
 
     private void broadcastResult() {
@@ -166,17 +218,47 @@ public class GreedySnake extends Thread{ // generate symmetric map
 
         lock.lock();
         try {
-            resp.put("player1", snake1.dir);
-            resp.put("player2", snake2.dir);
-            snake1.dir = snake2.dir = null;
+            resp.put("player1", next1);
+            resp.put("player2", next2);
+            next1 = next2 = null;
         } finally {
             lock.unlock();
         }
         broadcastMsg(resp.toJSONString());
     }
 
+    private boolean isSnakeValid(List<SnakeCell> me, List<SnakeCell> other) {
+        // do not hit the wall
+        Integer sizeMe = me.size();
+        SnakeCell head = me.get(sizeMe - 1);
+        if(gameMap[head.x][head.y]) return false;
+        // do not hit myself
+        for(SnakeCell cell:me) {
+            if(cell == head) break;
+            if(cell.x == head.x && cell.y == head.y) return false;
+        }
+        // do not hit others
+        for(SnakeCell cell:other) {
+            if(cell.x == head.x && cell.y == head.y) return false;
+        }
+        return true;
+    }
+
     private Status judge() {
-        return Status.IN_GAME;
+        List<SnakeCell> cells1 = snake1.getCells(), cells2 = snake2.getCells();
+
+        boolean snake1Valid = isSnakeValid(cells1, cells2);
+        boolean snake2Valid = isSnakeValid(cells2, cells1);
+
+        if(snake1Valid && snake2Valid) {
+            return Status.IN_GAME;
+        } else if(snake1Valid && !snake2Valid) {
+            return Status.SNAKE1_WIN;
+        } else if(!snake1Valid && snake2Valid) {
+            return Status.SNAKE2_WIN;
+        } else {
+            return Status.DRAW;
+        }
     }
 
 
@@ -184,6 +266,16 @@ public class GreedySnake extends Thread{ // generate symmetric map
         return gameMap;
     }
 
+    public String getGameMapString() {
+        StringBuilder sb = new StringBuilder();
+        for(int i = 0; i < ROW_CNT; i++) {
+            for(int j = 0; j < COL_CNT; j++) {
+                int tmp = gameMap[i][j] ? 1 : 0;
+                sb.append(tmp);
+            }
+        }
+        return sb.toString();
+    }
     public Snake getSnake1() {
         return snake1;
     }
@@ -191,5 +283,6 @@ public class GreedySnake extends Thread{ // generate symmetric map
     public Snake getSnake2() {
         return snake2;
     }
+
 
 }

@@ -1,12 +1,12 @@
 package server.consumers;
 
-import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import server.games.greedysnake.Direction;
 import server.games.greedysnake.Event;
 import server.games.greedysnake.GreedySnake;
+import server.mappers.RecordMapper;
 import server.mappers.UserMapper;
 import server.pojos.User;
 import server.utils.JwtUtil;
@@ -28,6 +28,7 @@ public class WebSocketServer { // NOT BEAN
 
     // the class is not a bean
     private static UserMapper userMapper;
+    public static RecordMapper recordMapper;
     // client session
     private Session session;
 
@@ -45,7 +46,10 @@ public class WebSocketServer { // NOT BEAN
     public void setUserMapper(UserMapper userMapper) {
         WebSocketServer.userMapper = userMapper;
     }
-
+    @Autowired
+    public void setRecordMapper(RecordMapper recordMapper) {
+        WebSocketServer.recordMapper = recordMapper;
+    }
     @OnOpen
     public void onOpen(Session session, @PathParam("jwt") String jwt) throws IOException {
         this.session = session;
@@ -107,34 +111,34 @@ public class WebSocketServer { // NOT BEAN
 
                 JSONObject player1 = new JSONObject();
                 player1.put("uid", game.getSnake1().getUid());
-                player1.put("x", game.getSnake1().getX());
-                player1.put("y", game.getSnake1().getY());
+                player1.put("x", game.getSnake1().getStX());
+                player1.put("y", game.getSnake1().getStY());
 
                 JSONObject player2 = new JSONObject();
                 player2.put("uid", game.getSnake2().getUid());
-                player2.put("x", game.getSnake2().getX());
-                player2.put("y", game.getSnake2().getY());
+                player2.put("x", game.getSnake2().getStX());
+                player2.put("y", game.getSnake2().getStY());
 
                 JSONObject gameInfo = new JSONObject();
                 gameInfo.put("player1", player1);
                 gameInfo.put("player2", player2);
                 gameInfo.put("map", game.getGameMap());
 
-
-                JSONObject resp1 = new JSONObject();
-                resp1.put("event", Event.START.toString());
                 JSONObject oppo1 = new JSONObject();
                 oppo1.put("usrname", u2.getUsrname());
                 oppo1.put("avatar", u2.getAvatar());
+                JSONObject resp1 = new JSONObject();
+                resp1.put("event", Event.START);
                 resp1.put("opponent", oppo1);
                 resp1.put("gameInfo", gameInfo);
                 socket1.sendMessage(resp1.toJSONString());
 
-                JSONObject resp2 = new JSONObject();
-                resp2.put("event", Event.START.toString());
                 JSONObject oppo2 = new JSONObject();
+                oppo2.put("uid", u1.getUid());
                 oppo2.put("usrname", u1.getUsrname());
                 oppo2.put("avatar", u1.getAvatar());
+                JSONObject resp2 = new JSONObject();
+                resp2.put("event", Event.START);
                 resp2.put("opponent", oppo2);
                 resp2.put("gameInfo", gameInfo);
                 socket2.sendMessage(resp2.toJSONString());
@@ -151,9 +155,9 @@ public class WebSocketServer { // NOT BEAN
 
     private void move(Direction dir) {
         if(game.getSnake1().getUid() == user.getUid()) {
-            game.getSnake1().dir = dir;
+            game.setNext1(dir);
         } else if(game.getSnake2().getUid() == user.getUid()) {
-            game.getSnake2().dir = dir;
+            game.setNext2(dir);
         } else {
             throw new RuntimeException();
         }

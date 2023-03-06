@@ -14,8 +14,8 @@ import java.util.Date;
 @AllArgsConstructor
 public class Bot {
     @TableId(type = IdType.AUTO)
-
     private Integer id;
+
     private Integer uid;
     private String name;
     private String description;
